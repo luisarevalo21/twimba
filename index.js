@@ -1,27 +1,42 @@
 // import { tweetsData } from "./data.js";
 import { v4 as uuidv4 } from "https://jspm.dev/uuid";
-import axios from "axios";
+
+import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+import {
+  getDatabase,
+  ref,
+  push,
+  onValue,
+  remove,
+  update,
+} from "https://www.gstatic.com/firebasejs/9.15.0/firebase-database.js";
+const appSettings = {
+  databaseURL: "https://twitter-clone-23b7a-default-rtdb.firebaseio.com/",
+};
+
+const app = initializeApp(appSettings);
+const database = getDatabase(app);
+const tweetsInDB = ref(database, "tweets");
+
 let tweetsData = [];
-async function getTweets() {
-  const data = await axios.get("https://twitter-clone-23b7a-default-rtdb.firebaseio.com/tweets.json");
 
-  console.log(data);
+onValue(tweetsInDB, function (snapshot) {
+  if (snapshot.exists()) {
+    let val = Object.entries(snapshot.val()).map(tweet => {
+      return {
+        firebaseId: tweet[0],
+        ...tweet[1],
+      };
+    });
 
-  if (data.data === null) {
-    console.log("iunside if");
-    return `<h1> No tweets found </h1>`;
+    val = val.reverse();
+    tweetsData = val;
+    render();
   }
-  const res = Object.entries(data.data).map(data => {
-    return { firebaseId: data[0], ...data[1] };
-  });
+  noTweets();
+});
 
-  tweetsData = res.reverse();
-  console.log(tweetsData);
-  //   console.log(res);
-  //   data.data.forEach(d => console.log(d));
-  //   console.log(data.data.);
-  return tweetsData;
-}
+function noTweets() {}
 
 document.addEventListener("click", function (e) {
   if (e.target.dataset.like) {
@@ -38,36 +53,26 @@ document.addEventListener("click", function (e) {
 });
 
 async function handleLikeClick(tweetId) {
-  //   console.log("Tweeting id", tweetId.toString());
-  //   console.log(tweetsData);
   const targetTweetObj = tweetsData.filter(function (tweet) {
-    // console.log("tweeint inside is", tweet);
     return tweet.uuid === tweetId;
   })[0];
-  console.log("target object", targetTweetObj);
+  let location = ref(database, `/tweets/${targetTweetObj.firebaseId}`);
 
   let likes = targetTweetObj.likes;
   if (targetTweetObj.isLiked) {
-    // likes--;
-
-    await axios.put(
-      `https://twitter-clone-23b7a-default-rtdb.firebaseio.com/tweets/${targetTweetObj.firebaseId}.json`,
-      {
-        ...targetTweetObj,
-        isLiked: !targetTweetObj.isLiked,
-        likes: --likes,
-      }
-    );
+    update(location, {
+      ...targetTweetObj,
+      isLiked: !targetTweetObj.isLiked,
+      likes: --likes,
+    });
   } else {
-    // targetTweetObj.likes++;
-    await axios.put(
-      `https://twitter-clone-23b7a-default-rtdb.firebaseio.com/tweets/${targetTweetObj.firebaseId}.json`,
-      {
+    {
+      update(location, {
         ...targetTweetObj,
         isLiked: !targetTweetObj.isLiked,
         likes: ++likes,
-      }
-    );
+      });
+    }
   }
   targetTweetObj.isLiked = !targetTweetObj.isLiked;
   render();
@@ -79,35 +84,22 @@ async function handleRetweetClick(tweetId) {
   })[0];
 
   let retweets = targetTweetObj.retweets;
+  let location = ref(database, `/tweets/${targetTweetObj.firebaseId}`);
 
-  console.log("retweets", retweets);
   if (targetTweetObj.isRetweeted) {
-    // likes--;
-
-    await axios.put(
-      `https://twitter-clone-23b7a-default-rtdb.firebaseio.com/tweets/${targetTweetObj.firebaseId}.json`,
-      {
-        ...targetTweetObj,
-        isRetweeted: !targetTweetObj.isRetweeted,
-        retweets: --retweets,
-      }
-    );
+    update(location, {
+      ...targetTweetObj,
+      isRetweeted: !targetTweetObj.isRetweeted,
+      retweets: --retweets,
+    });
   } else {
-    // targetTweetObj.likes++;
-    await axios.put(
-      `https://twitter-clone-23b7a-default-rtdb.firebaseio.com/tweets/${targetTweetObj.firebaseId}.json`,
-      {
-        ...targetTweetObj,
-        isRetweeted: !targetTweetObj.isRetweeted,
-        retweets: ++retweets,
-      }
-    );
+    update(location, {
+      ...targetTweetObj,
+      isRetweeted: !targetTweetObj.isRetweeted,
+      retweets: ++retweets,
+    });
   }
-  //     targetTweetObj.retweets--;
-  //   } else {
-  //     targetTweetObj.retweets++;
-  //   }
-  //   targetTweetObj.isRetweeted = !targetTweetObj.isRetweeted;
+
   render();
 }
 
@@ -119,58 +111,79 @@ async function handleTweetBtnClick() {
   const tweetInput = document.getElementById("tweet-input");
 
   if (tweetInput.value) {
-    await axios.post(`https://twitter-clone-23b7a-default-rtdb.firebaseio.com/tweets.json`, {
-      handle: `@Scrimba`,
-      profilePic: `images/scrimbalogo.png`,
-      likes: 0,
-      retweets: 0,
-      tweetText: tweetInput.value,
-      replies: [],
+    push(tweetsInDB, {
+      handle: `@Elon ✅`,
+      profilePic: `images/musk.png`,
+      likes: 6500,
+      retweets: 234,
+      tweetText: `I need volunteers for a one-way mission to Mars 🪐. No experience necessary🚀`,
+      replies: [
+        {
+          handle: `@TomCruise ✅`,
+          profilePic: `images/tcruise.png`,
+          tweetText: `Yes! Sign me up! 😎🛩`,
+        },
+        {
+          handle: `@ChuckNorris ✅`,
+          profilePic: `images/chucknorris.jpeg`,
+          tweetText: `I went last year😴`,
+        },
+      ],
       isLiked: false,
       isRetweeted: false,
-      uuid: uuidv4(),
+      uuid: "3c23454ee-c0f5-9g9g-9c4b-77835tgs2",
     });
+    // await axios.post(`https://twitter-clone-23b7a-default-rtdb.firebaseio.com/tweets.json`, {
+    //   handle: `@Scrimba`,
+    //   profilePic: `images/scrimbalogo.png`,
+    //   likes: 0,
+    //   retweets: 0,
+    //   tweetText: tweetInput.value,
+    //   replies: [],
+    //   isLiked: false,
+    //   isRetweeted: false,
+    //   uuid: uuidv4(),
+    // });
 
-    tweetsData.unshift({
-      handle: `@Scrimba`,
-      profilePic: `images/scrimbalogo.png`,
-      likes: 0,
-      retweets: 0,
-      tweetText: tweetInput.value,
-      replies: [],
-      isLiked: false,
-      isRetweeted: false,
-      uuid: uuidv4(),
-    });
+    // tweetsData.unshift({
+    //   handle: `@Scrimba`,
+    //   profilePic: `images/scrimbalogo.png`,
+    //   likes: 0,
+    //   retweets: 0,
+    //   tweetText: tweetInput.value,
+    //   replies: [],
+    //   isLiked: false,
+    //   isRetweeted: false,
+    //   uuid: uuidv4(),
+    // });
     render();
     tweetInput.value = "";
   }
 }
 
-function handleDeleteTweet(tweet) {
-  console.log(tweet);
+async function handleDeleteTweet(tweetId) {
+  let exactLocationInDB = await ref(database, `/tweets/${tweetId}`);
+  remove(exactLocationInDB);
 
-  axios.delete(`https://twitter-clone-23b7a-default-rtdb.firebaseio.com/tweets/${tweet}.json`);
+  console.log(tweetId);
+
   tweetsData = tweetsData.filter(tweet => {
-    return tweet.firebaseId !== tweet.toString();
+    return tweet.firebaseId !== tweetId.toString();
   });
   render();
 }
 
 async function getFeedHtml() {
   let feedHtml = ``;
-  const tweetsData = await getTweets();
 
-  //   const tweetsData = await getTweets();
-  //   console.log(typeof tweetsData);
-  if (typeof tweetsData === "string") {
-    return tweetsData;
+  console.log(tweetsData.length);
+  if (tweetsData.length === 0) {
+    return `<h1> No tweets found </h1>`;
   }
 
   tweetsData.forEach(function (tweet) {
     let likeIconClass = "";
 
-    console.log("tweet insinde get html feed", tweet);
     if (tweet.isLiked) {
       likeIconClass = "liked";
     }
@@ -241,8 +254,8 @@ async function getFeedHtml() {
 }
 
 async function render() {
-  const res = await getFeedHtml();
-  document.getElementById("feed").innerHTML = res;
+  //   const res = await getFeedHtml();
+  document.getElementById("feed").innerHTML = await getFeedHtml();
 }
 
 render();
